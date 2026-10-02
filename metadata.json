@@ -1,0 +1,6 @@
+{
+  "name": "Phone",
+  "description": "Modern Android Dialer & Calling App with Telecom integration, dual-SIM support, call history, contacts manager, and call blocking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

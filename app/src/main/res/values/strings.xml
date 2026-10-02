@@ -1,0 +1,57 @@
+<resources>
+    <string name="app_name">Phone</string>
+    <string name="tab_favorites">Favorites</string>
+    <string name="tab_recents">Recents</string>
+    <string name="tab_contacts">Contacts</string>
+    <string name="tab_keypad">Keypad</string>
+
+    <string name="favorites_empty_title">Your favorite contacts will appear here.</string>
+    <string name="favorites_empty_subtitle">Pin important people for one-tap calling and quick access.</string>
+    <string name="action_add_favorite">Add Favorite</string>
+    <string name="action_manage_favorites">Manage Favorites</string>
+
+    <string name="recents_empty_title">No recent calls</string>
+    <string name="recents_empty_subtitle">Your incoming, outgoing, and missed calls will appear here.</string>
+    <string name="filter_all">All</string>
+    <string name="filter_missed">Missed</string>
+    <string name="filter_incoming">Incoming</string>
+    <string name="filter_outgoing">Outgoing</string>
+    <string name="filter_rejected">Rejected</string>
+    <string name="filter_blocked">Blocked</string>
+
+    <string name="call_type_incoming">Incoming call</string>
+    <string name="call_type_outgoing">Outgoing call</string>
+    <string name="call_type_missed">Missed call</string>
+    <string name="call_type_rejected">Rejected call</string>
+    <string name="call_type_blocked">Blocked call</string>
+
+    <string name="action_call">Call</string>
+    <string name="action_message">Message</string>
+    <string name="action_video">Video</string>
+    <string name="action_favorite">Favorite</string>
+    <string name="action_unfavorite">Remove Favorite</string>
+    <string name="action_add_contact">Add Contact</string>
+    <string name="action_edit_contact">Edit Contact</string>
+    <string name="action_delete_contact">Delete Contact</string>
+    <string name="action_share_contact">Share Contact</string>
+    <string name="action_block_number">Block Number</string>
+    <string name="action_unblock_number">Unblock Number</string>
+    <string name="action_delete_call_history">Delete Call History</string>
+    <string name="action_clear_call_history">Clear All Call History</string>
+    <string name="action_save">SAVE</string>
+    <string name="action_cancel">CANCEL</string>
+    <string name="action_accept">Accept</string>
+    <string name="action_decline">Decline</string>
+    <string name="action_end_call">End Call</string>
+
+    <string name="unknown_number">Unknown Number</string>
+    <string name="incoming_call_label">Incoming call</string>
+    <string name="default_dialer_prompt_title">Make this your default phone app</string>
+    <string name="default_dialer_prompt_body">Set Phone as your default dialer to enable full-screen incoming call handling, in-call audio controls, and automatic call blocking.</string>
+    <string name="set_default_phone_app">Set as default phone app</string>
+
+    <string name="error_invalid_number">Please enter a valid phone number (e.g., 017XXXXXXXX or +8801XXXXXXXXX).</string>
+    <string name="error_call_failed">Unable to place the call. Please check your SIM and network connection.</string>
+    <string name="permission_rationale_title">Permissions for Full Calling Experience</string>
+    <string name="permission_rationale_body">Phone uses Contacts, Call Logs, and Phone permissions to display caller ID, sync your address book, and place cellular calls. Your personal data never leaves your device.</string>
+</resources>
