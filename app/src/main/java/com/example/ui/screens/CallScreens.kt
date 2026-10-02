@@ -332,9 +332,9 @@ fun IncomingCallScreen(
 }
 
 /**
- * Modern Swipe-Up Call Action Slider Button.
- * Draggable vertically upwards with animated arrow cues, spring-back physics,
- * and direct tap support.
+ * Modern Full-Screen Bottom-to-Top Swipe Call Action Slider Button.
+ * Draggable vertically upwards with cascading animated arrow cues, spring-back physics,
+ * full track touch-surface, and direct tap support.
  */
 @Composable
 private fun SwipeUpCallButton(
@@ -347,15 +347,33 @@ private fun SwipeUpCallButton(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    val maxDragPx = with(density) { 68.dp.toPx() }
-    val thresholdPx = with(density) { 46.dp.toPx() }
+    val maxDragPx = with(density) { 135.dp.toPx() }
+    val thresholdPx = with(density) { 50.dp.toPx() }
     val offsetYAnim = remember { Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
 
     val arrowBounceTransition = rememberInfiniteTransition(label = "arrow_bounce_$actionText")
+    val chevronAlpha1 by arrowBounceTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ch1_$actionText"
+    )
+    val chevronAlpha2 by arrowBounceTransition.animateFloat(
+        initialValue = 0.7f,
+        targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ch2_$actionText"
+    )
     val arrowOffsetY by arrowBounceTransition.animateFloat(
         initialValue = 0f,
-        targetValue = -7f,
+        targetValue = -10f,
         animationSpec = infiniteRepeatable(
             animation = tween(650, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
@@ -367,39 +385,84 @@ private fun SwipeUpCallButton(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
     ) {
-        // Vertical track pill
+        // Vertical track pill extending high upwards
         Box(
             modifier = Modifier
-                .width(76.dp)
-                .height(144.dp)
-                .clip(RoundedCornerShape(38.dp))
-                .background(Color.White.copy(alpha = 0.15f)),
+                .width(86.dp)
+                .height(208.dp)
+                .clip(RoundedCornerShape(43.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            buttonColor.copy(alpha = 0.25f),
+                            Color.White.copy(alpha = 0.12f),
+                            Color.White.copy(alpha = 0.06f)
+                        )
+                    )
+                )
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onVerticalDrag = { change, dragAmount ->
+                            change.consume()
+                            coroutineScope.launch {
+                                val newOffset = (offsetYAnim.value + dragAmount).coerceIn(-maxDragPx, 0f)
+                                offsetYAnim.snapTo(newOffset)
+                                if (newOffset <= -thresholdPx) {
+                                    onTrigger()
+                                }
+                            }
+                        },
+                        onDragEnd = {
+                            coroutineScope.launch {
+                                if (offsetYAnim.value <= -thresholdPx) {
+                                    onTrigger()
+                                } else {
+                                    offsetYAnim.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 400f))
+                                }
+                            }
+                        },
+                        onDragCancel = {
+                            coroutineScope.launch {
+                                offsetYAnim.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 400f))
+                            }
+                        }
+                    )
+                },
             contentAlignment = Alignment.BottomCenter
         ) {
-            // Upper track guide with animated upward chevron
+            // Upper track guide with animated upward chevrons
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 10.dp)
+                    .padding(top = 14.dp)
                     .offset(y = arrowOffsetY.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowUp,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier.size(22.dp)
+                    tint = Color.White.copy(alpha = chevronAlpha1),
+                    modifier = Modifier.size(24.dp)
                 )
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowUp,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = chevronAlpha2),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .offset(y = (-6).dp)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "SWIPE UP",
-                    color = Color.White.copy(alpha = 0.75f),
-                    fontSize = 9.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.8.sp
+                    letterSpacing = 1.sp
                 )
             }
 
-            // Draggable action button
+            // Draggable action button at bottom of track
             Surface(
                 onClick = onTrigger,
                 shape = CircleShape,
@@ -407,44 +470,16 @@ private fun SwipeUpCallButton(
                 contentColor = Color.White,
                 shadowElevation = 8.dp,
                 modifier = Modifier
-                    .padding(bottom = 5.dp)
+                    .padding(bottom = 6.dp)
                     .offset { IntOffset(0, offsetYAnim.value.roundToInt()) }
-                    .size(66.dp)
-                    .pointerInput(Unit) {
-                        detectVerticalDragGestures(
-                            onVerticalDrag = { change, dragAmount ->
-                                change.consume()
-                                coroutineScope.launch {
-                                    val newOffset = (offsetYAnim.value + dragAmount).coerceIn(-maxDragPx, 0f)
-                                    offsetYAnim.snapTo(newOffset)
-                                    if (newOffset <= -thresholdPx) {
-                                        onTrigger()
-                                    }
-                                }
-                            },
-                            onDragEnd = {
-                                coroutineScope.launch {
-                                    if (offsetYAnim.value <= -thresholdPx) {
-                                        onTrigger()
-                                    } else {
-                                        offsetYAnim.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 400f))
-                                    }
-                                }
-                            },
-                            onDragCancel = {
-                                coroutineScope.launch {
-                                    offsetYAnim.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 400f))
-                                }
-                            }
-                        )
-                    }
+                    .size(74.dp)
                     .testTag(testTag)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = icon,
                         contentDescription = actionText,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(34.dp)
                     )
                 }
             }
@@ -758,34 +793,56 @@ fun ActiveCallScreen(
                 }
             }
 
-            // Bottom End Call Button
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(bottom = 20.dp)
+            // Bottom End Call Button (50% of screen width, center aligned, with swipe up & tap support)
+            ActiveCallEndSection(
+                onEndCallClick = onEndCallClick
+            )
+        }
+    }
+}
+
+/**
+ * Centered End Call button occupying 50% of screen width.
+ * Direct tap button with no swipe.
+ */
+@Composable
+private fun ActiveCallEndSection(
+    onEndCallClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 20.dp)
+    ) {
+        // 50% width Call End pill button, center aligned, direct tap
+        Surface(
+            onClick = onEndCallClick,
+            shape = RoundedCornerShape(32.dp),
+            color = CallDeclineRed,
+            contentColor = Color.White,
+            shadowElevation = 8.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.5f)
+                .height(64.dp)
+                .testTag("incall_end_call_button")
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    onClick = onEndCallClick,
-                    shape = CircleShape,
-                    color = CallDeclineRed,
-                    contentColor = Color.White,
-                    shadowElevation = 8.dp,
-                    modifier = Modifier
-                        .size(78.dp)
-                        .testTag("incall_end_call_button")
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.CallEnd,
-                            contentDescription = "End Call",
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
+                Icon(
+                    imageVector = Icons.Default.CallEnd,
+                    contentDescription = "End Call",
+                    modifier = Modifier.size(30.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = "End Call",
-                    color = Color.White.copy(alpha = 0.9f),
-                    style = MaterialTheme.typography.labelLarge
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }

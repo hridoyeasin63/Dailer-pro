@@ -76,6 +76,7 @@ import com.example.data.repository.PhoneNumberUtilsHelper
 import com.example.ui.CallHistoryFilter
 import com.example.ui.components.ContactAvatar
 import com.example.ui.components.SimBadge
+import com.example.ui.components.SwipeToCallContainer
 import com.example.ui.components.formatCallDurationLong
 import com.example.ui.components.formatCallTimestamp
 import com.example.ui.components.getCallTypeVisual
@@ -267,20 +268,24 @@ fun RecentsScreen(
             ) {
                 items(callLogs, key = { it.id }) { log ->
                     val isSelected = selectedIds.contains(log.id)
-                    CallHistoryRowCard(
-                        callLog = log,
-                        isSelected = isSelected,
-                        isSelectionMode = isSelectionMode,
-                        onClick = {
-                            if (isSelectionMode) {
-                                onToggleSelect(log.id)
-                            } else {
-                                onCallEntryClick(log)
-                            }
-                        },
-                        onLongClick = { onToggleSelect(log.id) },
-                        onCallClick = { onQuickCallClick(log.phoneNumber) }
-                    )
+                    SwipeToCallContainer(
+                        onSwipeToCall = { onQuickCallClick(log.phoneNumber) }
+                    ) {
+                        CallHistoryRowCard(
+                            callLog = log,
+                            isSelected = isSelected,
+                            isSelectionMode = isSelectionMode,
+                            onClick = {
+                                if (isSelectionMode) {
+                                    onToggleSelect(log.id)
+                                } else {
+                                    onCallEntryClick(log)
+                                }
+                            },
+                            onLongClick = { onToggleSelect(log.id) },
+                            onCallClick = { onQuickCallClick(log.phoneNumber) }
+                        )
+                    }
                 }
             }
         }
@@ -416,7 +421,6 @@ fun CallDetailsScreen(
     onCallClick: (String) -> Unit,
     onMessageClick: (String) -> Unit,
     onAddOrEditContactClick: () -> Unit,
-    onToggleFavoriteClick: () -> Unit,
     onToggleBlockClick: () -> Unit,
     onDeleteSingleCallLog: () -> Unit,
     onDeleteAllHistoryForNumber: () -> Unit,
@@ -589,33 +593,17 @@ fun CallDetailsScreen(
                     }
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         OutlinedButton(
                             onClick = onAddOrEditContactClick,
                             modifier = Modifier
-                                .weight(1f)
+                                .fillMaxWidth()
                                 .testTag("call_details_add_contact_button")
                         ) {
                             Icon(Icons.Default.PersonAdd, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(if (matchedContact == null) "Add to Contacts" else "Edit Contact")
-                        }
-                        if (matchedContact != null) {
-                            OutlinedButton(
-                                onClick = onToggleFavoriteClick,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("call_details_favorite_button")
-                            ) {
-                                Icon(
-                                    imageVector = if (matchedContact.isFavorite) Icons.Default.Star else Icons.Outlined.StarBorder,
-                                    contentDescription = null
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(if (matchedContact.isFavorite) "Favorited" else "Add to Favorites")
-                            }
                         }
                     }
 

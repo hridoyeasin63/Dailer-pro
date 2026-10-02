@@ -16,26 +16,43 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.outlined.Dialpad
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.PeopleOutline
-import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
@@ -43,6 +60,7 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -52,16 +70,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.preferences.AppThemeMode
-import com.example.data.repository.PhoneNumberUtilsHelper
 import com.example.telecom.CallManager
 import com.example.telecom.CallStatus
 import com.example.ui.AppSubScreen
@@ -74,10 +95,8 @@ import com.example.ui.screens.BlockedNumbersScreen
 import com.example.ui.screens.CallDetailsScreen
 import com.example.ui.screens.ContactDetailsScreen
 import com.example.ui.screens.ContactsScreen
-import com.example.ui.screens.FavoritesScreen
 import com.example.ui.screens.IncomingCallScreen
 import com.example.ui.screens.KeypadScreen
-import com.example.ui.screens.ManageFavoritesScreen
 import com.example.ui.screens.RecentsScreen
 import com.example.ui.screens.SearchScreen
 import com.example.ui.screens.SettingsScreen
@@ -153,17 +172,6 @@ fun getRequiredDialerPermissions(): Array<String> {
     return list.toTypedArray()
 }
 
-fun hasAllCorePermissions(context: Context): Boolean {
-    val core = listOf(
-        Manifest.permission.READ_CONTACTS,
-        Manifest.permission.READ_CALL_LOG,
-        Manifest.permission.CALL_PHONE
-    )
-    return core.all {
-        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-    }
-}
-
 @Composable
 fun PhoneDialerApp(viewModel: MainViewModel) {
     val context = LocalContext.current
@@ -175,7 +183,6 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
     val isDefaultDialer by viewModel.isDefaultDialer.collectAsStateWithLifecycle()
     val availableSims by viewModel.availableSims.collectAsStateWithLifecycle()
 
-    val favorites by viewModel.favoritesState.collectAsStateWithLifecycle()
     val contacts by viewModel.contactsState.collectAsStateWithLifecycle()
     val callLogs by viewModel.filteredCallLogsState.collectAsStateWithLifecycle()
     val activeFilter by viewModel.callHistoryFilter.collectAsStateWithLifecycle()
@@ -184,6 +191,7 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
 
     val dialedNumber by viewModel.dialedNumber.collectAsStateWithLifecycle()
     val keypadMatches by viewModel.keypadMatchingContacts.collectAsStateWithLifecycle()
+    val keypadSuggestions by viewModel.keypadSuggestions.collectAsStateWithLifecycle()
     val searchState by viewModel.searchResultsState.collectAsStateWithLifecycle()
 
     val activeCall by viewModel.activeCallState.collectAsStateWithLifecycle()
@@ -242,7 +250,7 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
         }
     }
 
-    BackHandler(enabled = currentSubScreen != AppSubScreen.None || selectedCallLogIds.isNotEmpty() || selectedTab != PrimaryTab.FAVORITES) {
+    BackHandler(enabled = currentSubScreen != AppSubScreen.None || selectedCallLogIds.isNotEmpty() || selectedTab != PrimaryTab.KEYPAD) {
         viewModel.navigateBack()
     }
 
@@ -336,6 +344,14 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
         return
     }
 
+    // REQUIRE DEFAULT DIALER: App does not operate until set as default phone app
+    if (!isDefaultDialer) {
+        DefaultDialerRequiredGateScreen(
+            onRequestDefaultDialer = requestDefaultDialerRole
+        )
+        return
+    }
+
     // Sub-screen navigation layer
     when (val sub = currentSubScreen) {
         is AppSubScreen.Search -> {
@@ -356,23 +372,6 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
             return
         }
 
-        is AppSubScreen.ManageFavorites -> {
-            ManageFavoritesScreen(
-                allContacts = contacts,
-                onToggleFavorite = viewModel::toggleFavorite,
-                onCreateNewFavoriteContact = {
-                    viewModel.openSubScreen(
-                        AppSubScreen.AddEditContact(
-                            contactId = null,
-                            prefillFavorite = true
-                        )
-                    )
-                },
-                onBack = { viewModel.navigateBack() }
-            )
-            return
-        }
-
         is AppSubScreen.AddEditContact -> {
             val existing = sub.contactId?.let { id ->
                 contacts.find { it.id == id }
@@ -380,8 +379,7 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
             AddEditContactScreen(
                 existingContact = existing,
                 prefillPhone = sub.prefillPhone,
-                prefillFavorite = sub.prefillFavorite,
-                onSave = { first, last, phone, email, company, notes, photo, fav ->
+                onSave = { first, last, phone, email, company, notes, photo ->
                     viewModel.saveContact(
                         existingId = sub.contactId,
                         firstName = first,
@@ -391,7 +389,6 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
                         company = company,
                         notes = notes,
                         photoUri = photo,
-                        isFavorite = fav,
                         onSaved = { viewModel.navigateBack() }
                     )
                 },
@@ -419,7 +416,6 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
                     onCallClick = { number -> viewModel.initiateCall(context, number) },
                     onMessageClick = { number -> viewModel.sendSmsToNumber(context, number) },
                     onVideoCallClick = { number -> viewModel.initiateCall(context, number) },
-                    onToggleFavorite = { viewModel.toggleFavorite(contact) },
                     onEditClick = {
                         viewModel.openSubScreen(AppSubScreen.AddEditContact(contactId = contact.id))
                     },
@@ -469,9 +465,6 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
                         } else {
                             viewModel.openSubScreen(AppSubScreen.AddEditContact(prefillPhone = currentLog.phoneNumber))
                         }
-                    },
-                    onToggleFavoriteClick = {
-                        matchedContact?.let { viewModel.toggleFavorite(it) }
                     },
                     onToggleBlockClick = {
                         if (isBlocked) {
@@ -604,38 +597,35 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
                 Box(modifier = Modifier.weight(1f)) {
                     Crossfade(targetState = selectedTab, label = "main_tab_crossfade") { tab ->
                         when (tab) {
-                            PrimaryTab.FAVORITES -> {
-                                FavoritesScreen(
-                                    favorites = favorites,
-                                    allContactsCount = contacts.size,
-                                    nameFormat = settings.contactNameFormat,
-                                    showDefaultDialerBanner = !isDefaultDialer && !settings.defaultDialerPromptDismissed,
-                                    onRequestDefaultDialer = requestDefaultDialerRole,
-                                    onDismissDefaultDialerBanner = viewModel::dismissDefaultDialerBanner,
-                                    onOpenSearch = { viewModel.openSubScreen(AppSubScreen.Search) },
-                                    onAddFavoriteClick = {
-                                        if (contacts.isEmpty()) {
-                                            viewModel.openSubScreen(
-                                                AppSubScreen.AddEditContact(prefillFavorite = true)
-                                            )
-                                        } else {
-                                            viewModel.openSubScreen(AppSubScreen.ManageFavorites)
-                                        }
+                            PrimaryTab.KEYPAD -> {
+                                KeypadScreen(
+                                    dialedNumber = dialedNumber,
+                                    suggestions = keypadSuggestions,
+                                    matchingContacts = keypadMatches,
+                                    availableSims = availableSims,
+                                    defaultSimSlot = settings.defaultSimSlot,
+                                    onDigitPress = { digit ->
+                                        viewModel.appendKeypadDigit(context, digit)
                                     },
-                                    onManageFavoritesClick = {
-                                        viewModel.openSubScreen(AppSubScreen.ManageFavorites)
+                                    onDigitLongPress = { digit ->
+                                        viewModel.onKeypadLongPress(context, digit)
                                     },
-                                    onContactClick = { contact ->
-                                        viewModel.openSubScreen(AppSubScreen.ContactDetails(contact.id))
+                                    onBackspace = viewModel::backspaceKeypad,
+                                    onClear = viewModel::clearKeypad,
+                                    onCallClick = { number, simSlot ->
+                                        viewModel.initiateCall(context, number, explicitSimSlot = simSlot)
                                     },
-                                    onQuickCallClick = { number ->
-                                        viewModel.initiateCall(context, number)
+                                    onSelectSimSlot = viewModel::updateDefaultSimSlot,
+                                    onAddContactWithNumber = { number ->
+                                        viewModel.openSubScreen(
+                                            AppSubScreen.AddEditContact(prefillPhone = number)
+                                        )
                                     },
-                                    onOpenBlockedNumbers = {
-                                        viewModel.openSubScreen(AppSubScreen.BlockedNumbers)
+                                    onContactSuggestionClick = { contact ->
+                                        viewModel.setDialedNumber(contact.phoneNumber)
                                     },
-                                    onOpenSettings = {
-                                        viewModel.openSubScreen(AppSubScreen.Settings)
+                                    onSuggestionClick = { number ->
+                                        viewModel.setDialedNumber(number)
                                     }
                                 )
                             }
@@ -654,7 +644,7 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
                                         viewModel.openSubScreen(AppSubScreen.CallDetails(log.id))
                                     },
                                     onQuickCallClick = { number ->
-                                        viewModel.initiateCall(context, number)
+                                        viewModel.initiateCall(context, number, forceSimPromptIfDualSim = true)
                                     },
                                     onOpenSearch = { viewModel.openSubScreen(AppSubScreen.Search) },
                                     onOpenBlockedNumbers = {
@@ -676,9 +666,8 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
                                     onContactClick = { contact ->
                                         viewModel.openSubScreen(AppSubScreen.ContactDetails(contact.id))
                                     },
-                                    onToggleFavorite = viewModel::toggleFavorite,
                                     onCallClick = { number ->
-                                        viewModel.initiateCall(context, number)
+                                        viewModel.initiateCall(context, number, forceSimPromptIfDualSim = true)
                                     },
                                     onMessageClick = { number ->
                                         viewModel.sendSmsToNumber(context, number)
@@ -705,43 +694,6 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
                                     }
                                 )
                             }
-
-                            PrimaryTab.KEYPAD -> {
-                                KeypadScreen(
-                                    dialedNumber = dialedNumber,
-                                    matchingContacts = keypadMatches,
-                                    availableSims = availableSims,
-                                    defaultSimSlot = settings.defaultSimSlot,
-                                    onDigitPress = { digit ->
-                                        viewModel.appendKeypadDigit(context, digit)
-                                    },
-                                    onDigitLongPress = { digit ->
-                                        viewModel.onKeypadLongPress(context, digit)
-                                    },
-                                    onBackspace = viewModel::backspaceKeypad,
-                                    onClear = viewModel::clearKeypad,
-                                    onPasteNumber = { pasted ->
-                                        val cleaned = pasted.filter {
-                                            it.isDigit() || it == '+' || it == '*' || it == '#'
-                                        }
-                                        if (cleaned.isNotEmpty()) {
-                                            viewModel.setDialedNumber(cleaned)
-                                        }
-                                    },
-                                    onCallClick = { number ->
-                                        viewModel.initiateCall(context, number)
-                                    },
-                                    onSelectSimSlot = viewModel::updateDefaultSimSlot,
-                                    onAddContactWithNumber = { number ->
-                                        viewModel.openSubScreen(
-                                            AppSubScreen.AddEditContact(prefillPhone = number)
-                                        )
-                                    },
-                                    onContactSuggestionClick = { contact ->
-                                        viewModel.setDialedNumber(contact.phoneNumber)
-                                    }
-                                )
-                            }
                         }
                     }
                 }
@@ -750,11 +702,125 @@ fun PhoneDialerApp(viewModel: MainViewModel) {
     }
 }
 
+/**
+ * Full-screen blocking gate displayed when the app is not set as default dialer.
+ * Guarantees that the app will not work without being set as default phone app.
+ */
+@Composable
+private fun DefaultDialerRequiredGateScreen(
+    onRequestDefaultDialer: () -> Unit
+) {
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        val isShortScreen = maxHeight < 580.dp
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(if (isShortScreen) 72.dp else 96.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Phone,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(if (isShortScreen) 36.dp else 48.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = stringResource(R.string.default_dialer_required_title),
+                style = if (isShortScreen) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = stringResource(R.string.default_dialer_required_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    GateFeatureRow(icon = Icons.Default.Phone, text = "Dial, receive & manage phone calls")
+                    GateFeatureRow(icon = Icons.Default.Security, text = "Screen spam & block unwanted numbers")
+                    GateFeatureRow(icon = Icons.Default.Lock, text = "Private, on-device contact storage")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            Button(
+                onClick = onRequestDefaultDialer,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag("gate_set_default_dialer_button"),
+                shape = RoundedCornerShape(26.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.set_default_phone_app),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GateFeatureRow(icon: ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
 private fun getTabIcon(tab: PrimaryTab, selected: Boolean): ImageVector {
     return when (tab) {
-        PrimaryTab.FAVORITES -> if (selected) Icons.Filled.Star else Icons.Outlined.StarOutline
+        PrimaryTab.KEYPAD -> if (selected) Icons.Filled.Dialpad else Icons.Outlined.Dialpad
         PrimaryTab.RECENTS -> if (selected) Icons.Filled.History else Icons.Outlined.History
         PrimaryTab.CONTACTS -> if (selected) Icons.Filled.People else Icons.Outlined.PeopleOutline
-        PrimaryTab.KEYPAD -> if (selected) Icons.Filled.Dialpad else Icons.Outlined.Dialpad
     }
 }

@@ -1,8 +1,11 @@
 package com.example.ui.components
 
 import android.net.Uri
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallMissed
 import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PhoneCallback
@@ -39,17 +44,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +67,8 @@ import com.example.data.local.CallRecordType
 import com.example.telecom.SimAccountInfo
 import com.example.ui.theme.AvatarColors
 import com.example.ui.theme.CallAcceptGreen
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import com.example.ui.theme.CallDeclineRed
 import com.example.ui.theme.CallWarningAmber
 import com.example.ui.theme.Sim1BadgeColor
@@ -379,4 +390,92 @@ fun DualSimChooserDialog(
             }
         }
     )
+}
+
+/**
+ * Swipe-to-Call container.
+ * When swiped right across the row, reveals a vibrant call action background and initiates a call.
+ */
+@Composable
+fun SwipeToCallContainer(
+    onSwipeToCall: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val density = LocalDensity.current
+    val thresholdPx = with(density) { 90.dp.toPx() }
+    val maxDragPx = with(density) { 150.dp.toPx() }
+    val offsetX = remember { Animatable(0f) }
+    val coroutineScope = rememberCoroutineScope()
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+    ) {
+        // Green background revealed when swiping right
+        if (offsetX.value > 0f) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(CallAcceptGreen),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Call,
+                        contentDescription = "Swipe to call",
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Call",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Foreground content sliding horizontally
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { change, dragAmount ->
+                            if (dragAmount > 0 || offsetX.value > 0f) {
+                                change.consume()
+                                coroutineScope.launch {
+                                    val newOffset = (offsetX.value + dragAmount).coerceIn(0f, maxDragPx)
+                                    offsetX.snapTo(newOffset)
+                                }
+                            }
+                        },
+                        onDragEnd = {
+                            coroutineScope.launch {
+                                if (offsetX.value >= thresholdPx) {
+                                    offsetX.animateTo(0f, spring(stiffness = 500f))
+                                    onSwipeToCall()
+                                } else {
+                                    offsetX.animateTo(0f, spring(stiffness = 500f))
+                                }
+                            }
+                        },
+                        onDragCancel = {
+                            coroutineScope.launch {
+                                offsetX.animateTo(0f, spring(stiffness = 500f))
+                            }
+                        }
+                    )
+                }
+        ) {
+            content()
+        }
+    }
 }

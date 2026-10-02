@@ -99,8 +99,7 @@ fun SearchScreen(
             )
         }
     ) { innerPadding ->
-        val hasAnyResults = searchState.matchingFavorites.isNotEmpty() ||
-            searchState.matchingContacts.isNotEmpty() ||
+        val hasAnyResults = searchState.matchingContacts.isNotEmpty() ||
             searchState.matchingCallLogs.isNotEmpty()
 
         if (!hasAnyResults && searchState.query.isNotBlank()) {
@@ -188,23 +187,6 @@ fun SearchScreen(
                                 )
                             }
                         }
-                    }
-                }
-
-                if (searchState.matchingFavorites.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = "Favorites (${searchState.matchingFavorites.size})",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    items(searchState.matchingFavorites, key = { "fav_${it.id}" }) { fav ->
-                        SearchContactItem(
-                            contact = fav,
-                            onClick = { onContactClick(fav) },
-                            onCallClick = { onQuickCallClick(fav.phoneNumber) }
-                        )
                     }
                 }
 

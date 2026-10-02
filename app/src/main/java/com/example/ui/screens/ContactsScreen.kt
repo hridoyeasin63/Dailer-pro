@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -45,9 +46,7 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -66,7 +65,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -93,12 +91,12 @@ import com.example.data.local.ContactEntity
 import com.example.data.preferences.ContactNameFormat
 import com.example.data.repository.PhoneNumberUtilsHelper
 import com.example.ui.components.ContactAvatar
+import com.example.ui.components.SwipeToCallContainer
 import com.example.ui.components.formatCallDurationLong
 import com.example.ui.components.formatCallTimestamp
 import com.example.ui.components.getCallTypeVisual
 import com.example.ui.theme.CallAcceptGreen
 import com.example.ui.theme.CallDeclineRed
-import com.example.ui.theme.CallWarningAmber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,7 +105,6 @@ fun ContactsScreen(
     nameFormat: ContactNameFormat,
     onAddContactClick: () -> Unit,
     onContactClick: (ContactEntity) -> Unit,
-    onToggleFavorite: (ContactEntity) -> Unit,
     onCallClick: (String) -> Unit,
     onMessageClick: (String) -> Unit,
     onShareContact: (ContactEntity) -> Unit,
@@ -141,7 +138,7 @@ fun ContactsScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "${contacts.size} saved contact(s)",
+                            text = "${contacts.size} contact(s)",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -220,13 +217,13 @@ fun ContactsScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Your address book is empty",
+                        text = "No contacts saved yet",
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.testTag("contacts_empty_text")
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Add contacts with Bangladesh (+880) or international numbers.",
+                        text = "Add contacts to make calls quickly.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -247,8 +244,8 @@ fun ContactsScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .testTag("contacts_list"),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 groupedContacts.forEach { (letter, groupList) ->
                     item(key = "header_$letter") {
@@ -256,21 +253,24 @@ fun ContactsScreen(
                             text = letter,
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp)
+                            modifier = Modifier.padding(start = 8.dp, top = 6.dp, bottom = 2.dp)
                         )
                     }
                     items(groupList, key = { it.id }) { contact ->
-                        ContactListRow(
-                            contact = contact,
-                            lastNameFirst = lastNameFirst,
-                            onClick = { onContactClick(contact) },
-                            onToggleFavorite = { onToggleFavorite(contact) },
-                            onCallClick = { onCallClick(contact.phoneNumber) },
-                            onMessageClick = { onMessageClick(contact.phoneNumber) },
-                            onShareClick = { onShareContact(contact) },
-                            onBlockClick = { onBlockContact(contact) },
-                            onDeleteClick = { onDeleteContact(contact) }
-                        )
+                        SwipeToCallContainer(
+                            onSwipeToCall = { onCallClick(contact.phoneNumber) }
+                        ) {
+                            ContactListRow(
+                                contact = contact,
+                                lastNameFirst = lastNameFirst,
+                                onClick = { onContactClick(contact) },
+                                onCallClick = { onCallClick(contact.phoneNumber) },
+                                onMessageClick = { onMessageClick(contact.phoneNumber) },
+                                onShareClick = { onShareContact(contact) },
+                                onBlockClick = { onBlockContact(contact) },
+                                onDeleteClick = { onDeleteContact(contact) }
+                            )
+                        }
                     }
                 }
             }
@@ -283,7 +283,6 @@ private fun ContactListRow(
     contact: ContactEntity,
     lastNameFirst: Boolean,
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit,
     onCallClick: () -> Unit,
     onMessageClick: () -> Unit,
     onShareClick: () -> Unit,
@@ -297,7 +296,7 @@ private fun ContactListRow(
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .testTag("contact_item_${contact.id}"),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
         )
@@ -305,14 +304,14 @@ private fun ContactListRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             ContactAvatar(
                 name = contact.fullName,
                 photoUri = contact.photoUri,
                 colorIndex = contact.avatarColorIndex,
-                size = 48.dp
+                size = 46.dp
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -324,15 +323,6 @@ private fun ContactListRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (contact.isFavorite) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = "Favorite",
-                            tint = CallWarningAmber,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
                     if (contact.isBlocked) {
                         Spacer(modifier = Modifier.width(6.dp))
                         Icon(
@@ -373,19 +363,6 @@ private fun ContactListRow(
                     expanded = rowMenuExpanded,
                     onDismissRequest = { rowMenuExpanded = false }
                 ) {
-                    DropdownMenuItem(
-                        text = { Text(if (contact.isFavorite) "Remove from Favorites" else "Add to Favorites") },
-                        leadingIcon = {
-                            Icon(
-                                if (contact.isFavorite) Icons.Default.Star else Icons.Outlined.StarBorder,
-                                contentDescription = null
-                            )
-                        },
-                        onClick = {
-                            rowMenuExpanded = false
-                            onToggleFavorite()
-                        }
-                    )
                     DropdownMenuItem(
                         text = { Text("Message") },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.Message, contentDescription = null) },
@@ -429,7 +406,6 @@ private fun ContactListRow(
 fun AddEditContactScreen(
     existingContact: ContactEntity?,
     prefillPhone: String = "",
-    prefillFavorite: Boolean = false,
     onSave: (
         firstName: String,
         lastName: String,
@@ -437,8 +413,7 @@ fun AddEditContactScreen(
         email: String,
         company: String,
         notes: String,
-        photoUri: String?,
-        isFavorite: Boolean
+        photoUri: String?
     ) -> Unit,
     onCancel: () -> Unit
 ) {
@@ -465,9 +440,6 @@ fun AddEditContactScreen(
     }
     var photoUri by rememberSaveable(existingContact?.id) {
         mutableStateOf(existingContact?.photoUri)
-    }
-    var isFavorite by rememberSaveable(existingContact?.id, prefillFavorite) {
-        mutableStateOf(existingContact?.isFavorite ?: prefillFavorite)
     }
     var validationError by remember { mutableStateOf<String?>(null) }
 
@@ -513,7 +485,7 @@ fun AddEditContactScreen(
                                 return@Button
                             }
                             if (!PhoneNumberUtilsHelper.isValidPhoneNumber(phoneNumber)) {
-                                validationError = "Enter a valid phone number (e.g., 01712345678 or +8801712345678)."
+                                validationError = "Enter a valid phone number (e.g., 017XXXXXXXX or +8801XXXXXXXXX)."
                                 return@Button
                             }
                             validationError = null
@@ -524,8 +496,7 @@ fun AddEditContactScreen(
                                 email,
                                 company,
                                 notes,
-                                photoUri,
-                                isFavorite
+                                photoUri
                             )
                         },
                         modifier = Modifier
@@ -708,40 +679,6 @@ fun AddEditContactScreen(
                     .testTag("input_notes")
             )
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = null,
-                            tint = CallWarningAmber
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "Add to Favorites",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                    Switch(
-                        checked = isFavorite,
-                        onCheckedChange = { isFavorite = it },
-                        modifier = Modifier.testTag("input_favorite_switch")
-                    )
-                }
-            }
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -761,7 +698,7 @@ fun AddEditContactScreen(
                             return@Button
                         }
                         if (!PhoneNumberUtilsHelper.isValidPhoneNumber(phoneNumber)) {
-                            validationError = "Enter a valid phone number (e.g., 01712345678 or +8801712345678)."
+                            validationError = "Enter a valid phone number (e.g., 017XXXXXXXX or +8801XXXXXXXXX)."
                             return@Button
                         }
                         validationError = null
@@ -772,8 +709,7 @@ fun AddEditContactScreen(
                             email,
                             company,
                             notes,
-                            photoUri,
-                            isFavorite
+                            photoUri
                         )
                     },
                     modifier = Modifier
@@ -796,7 +732,6 @@ fun ContactDetailsScreen(
     onCallClick: (String) -> Unit,
     onMessageClick: (String) -> Unit,
     onVideoCallClick: (String) -> Unit,
-    onToggleFavorite: () -> Unit,
     onEditClick: () -> Unit,
     onShareClick: () -> Unit,
     onToggleBlockClick: () -> Unit,
@@ -870,272 +805,268 @@ fun ContactDetailsScreen(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Header Card with Large Profile Photo & Quick Actions
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+        BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            val isSmallScreen = maxHeight < 640.dp
+            val avatarSize = if (isSmallScreen) 80.dp else 100.dp
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Header Card with Profile Photo & Quick Actions
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(22.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
                     ) {
-                        ContactAvatar(
-                            name = contact.fullName,
-                            photoUri = contact.photoUri,
-                            colorIndex = contact.avatarColorIndex,
-                            size = 104.dp,
-                            fontSize = 36.sp
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Text(
-                            text = contact.fullName,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.testTag("contact_details_name")
-                        )
-                        if (contact.company.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(4.dp))
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            ContactAvatar(
+                                name = contact.fullName,
+                                photoUri = contact.photoUri,
+                                colorIndex = contact.avatarColorIndex,
+                                size = avatarSize,
+                                fontSize = if (isSmallScreen) 28.sp else 34.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = contact.company,
+                                text = contact.fullName,
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.testTag("contact_details_name")
+                            )
+                            if (contact.company.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = contact.company,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(18.dp))
+
+                            // Quick Actions: CALL, MESSAGE, VIDEO
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                QuickActionPill(
+                                    icon = Icons.Default.Call,
+                                    label = "CALL",
+                                    active = true,
+                                    onClick = { onCallClick(contact.phoneNumber) },
+                                    testTag = "contact_quick_call_button"
+                                )
+                                QuickActionPill(
+                                    icon = Icons.AutoMirrored.Filled.Message,
+                                    label = "MESSAGE",
+                                    active = false,
+                                    onClick = { onMessageClick(contact.phoneNumber) },
+                                    testTag = "contact_quick_message_button"
+                                )
+                                QuickActionPill(
+                                    icon = Icons.Default.Videocam,
+                                    label = "VIDEO",
+                                    active = false,
+                                    onClick = { onVideoCallClick(contact.phoneNumber) },
+                                    testTag = "contact_quick_video_button"
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Contact Information Card
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "Contact Info",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                        }
-                        Spacer(modifier = Modifier.height(20.dp))
 
-                        // Quick Actions: CALL, MESSAGE, VIDEO, FAVORITE
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            QuickActionPill(
-                                icon = Icons.Default.Call,
-                                label = "CALL",
-                                active = true,
-                                onClick = { onCallClick(contact.phoneNumber) },
-                                testTag = "contact_quick_call_button"
-                            )
-                            QuickActionPill(
-                                icon = Icons.AutoMirrored.Filled.Message,
-                                label = "MESSAGE",
-                                active = false,
-                                onClick = { onMessageClick(contact.phoneNumber) },
-                                testTag = "contact_quick_message_button"
-                            )
-                            QuickActionPill(
-                                icon = Icons.Default.Videocam,
-                                label = "VIDEO",
-                                active = false,
-                                onClick = { onVideoCallClick(contact.phoneNumber) },
-                                testTag = "contact_quick_video_button"
-                            )
-                            QuickActionPill(
-                                icon = if (contact.isFavorite) Icons.Default.Star else Icons.Outlined.StarBorder,
-                                label = "FAVORITE",
-                                active = contact.isFavorite,
-                                onClick = onToggleFavorite,
-                                testTag = "contact_quick_favorite_button"
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onCallClick(contact.phoneNumber) },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = PhoneNumberUtilsHelper.formatForDisplay(contact.phoneNumber),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.testTag("contact_details_phone")
+                                    )
+                                    Text(
+                                        text = "Mobile",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                IconButton(onClick = { onMessageClick(contact.phoneNumber) }) {
+                                    Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Message")
+                                }
+                            }
+
+                            if (contact.email.isNotBlank()) {
+                                HorizontalDivider()
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Email,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Column {
+                                        Text(contact.email, style = MaterialTheme.typography.bodyLarge)
+                                        Text(
+                                            text = "Email",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (contact.notes.isNotBlank()) {
+                                HorizontalDivider()
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Notes,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Column {
+                                        Text(contact.notes, style = MaterialTheme.typography.bodyLarge)
+                                        Text(
+                                            text = "Notes",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-            }
 
-            // Contact Information Card
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                // Secondary Management Actions (Block, Delete)
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(
-                            text = "Contact Info",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-
-                        Row(
+                        OutlinedButton(
+                            onClick = onToggleBlockClick,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onCallClick(contact.phoneNumber) },
-                            verticalAlignment = Alignment.CenterVertically
+                                .weight(1f)
+                                .testTag("contact_details_block_button")
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Phone,
+                                imageVector = Icons.Default.Block,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = CallDeclineRed
                             )
-                            Spacer(modifier = Modifier.width(14.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = PhoneNumberUtilsHelper.formatForDisplay(contact.phoneNumber),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.testTag("contact_details_phone")
-                                )
-                                Text(
-                                    text = "Mobile",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            IconButton(onClick = { onMessageClick(contact.phoneNumber) }) {
-                                Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Message")
-                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isBlocked) "Unblock" else "Block",
+                                color = CallDeclineRed
+                            )
                         }
-
-                        if (contact.email.isNotBlank()) {
-                            HorizontalDivider()
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Email,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(14.dp))
-                                Column {
-                                    Text(contact.email, style = MaterialTheme.typography.bodyLarge)
-                                    Text(
-                                        text = "Email",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-
-                        if (contact.notes.isNotBlank()) {
-                            HorizontalDivider()
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Notes,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(14.dp))
-                                Column {
-                                    Text(contact.notes, style = MaterialTheme.typography.bodyLarge)
-                                    Text(
-                                        text = "Notes",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
+                        OutlinedButton(
+                            onClick = { showDeleteConfirm = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = null,
+                                tint = CallDeclineRed
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Delete Contact", color = CallDeclineRed)
                         }
                     }
                 }
-            }
 
-            // Secondary Management Actions (Edit, Share, Block, Delete)
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onToggleBlockClick,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("contact_details_block_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Block,
-                            contentDescription = null,
-                            tint = CallDeclineRed
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isBlocked) "Unblock" else "Block",
-                            color = CallDeclineRed
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = { showDeleteConfirm = true },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = null,
-                            tint = CallDeclineRed
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Delete Contact", color = CallDeclineRed)
-                    }
-                }
-            }
-
-            // Recent Activity Section
-            item {
-                Text(
-                    text = "Recent Activity (${recentCalls.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            if (recentCalls.isEmpty()) {
+                // Recent Activity Section
                 item {
                     Text(
-                        text = "No call history with ${contact.fullName} yet.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "Recent Activity (${recentCalls.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
-            } else {
-                items(recentCalls, key = { it.id }) { log ->
-                    val visual = getCallTypeVisual(log.callType)
-                    val (d, t) = formatCallTimestamp(log.timestamp)
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+
+                if (recentCalls.isEmpty()) {
+                    item {
+                        Text(
+                            text = "No call history with ${contact.fullName} yet.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    items(recentCalls, key = { it.id }) { log ->
+                        val visual = getCallTypeVisual(log.callType)
+                        val (d, t) = formatCallTimestamp(log.timestamp)
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = visual.icon,
-                                    contentDescription = null,
-                                    tint = visual.tint,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(visual.label, style = MaterialTheme.typography.bodyLarge)
-                                    Text(
-                                        text = "$d, $t • ${log.simCarrierName}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = visual.icon,
+                                        contentDescription = null,
+                                        tint = visual.tint,
+                                        modifier = Modifier.size(18.dp)
                                     )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(visual.label, style = MaterialTheme.typography.bodyLarge)
+                                        Text(
+                                            text = "$d, $t • ${log.simCarrierName}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
+                                Text(
+                                    text = formatCallDurationLong(log.durationSeconds),
+                                    style = MaterialTheme.typography.labelLarge
+                                )
                             }
-                            Text(
-                                text = formatCallDurationLong(log.durationSeconds),
-                                style = MaterialTheme.typography.labelLarge
-                            )
                         }
                     }
                 }
@@ -1161,7 +1092,7 @@ private fun QuickActionPill(
     ) {
         Box(
             modifier = Modifier
-                .size(52.dp)
+                .size(50.dp)
                 .clip(CircleShape)
                 .background(
                     if (active) MaterialTheme.colorScheme.primary

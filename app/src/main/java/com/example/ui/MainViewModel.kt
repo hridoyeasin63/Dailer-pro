@@ -31,10 +31,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class PrimaryTab(val route: String, val label: String) {
-    FAVORITES("favorites", "Favorites"),
+    KEYPAD("keypad", "Keypad"),
     RECENTS("recents", "Recents"),
-    CONTACTS("contacts", "Contacts"),
-    KEYPAD("keypad", "Keypad")
+    CONTACTS("contacts", "Contacts")
 }
 
 enum class CallHistoryFilter(val label: String) {
@@ -49,11 +48,9 @@ enum class CallHistoryFilter(val label: String) {
 sealed interface AppSubScreen {
     data object None : AppSubScreen
     data object Search : AppSubScreen
-    data object ManageFavorites : AppSubScreen
     data class AddEditContact(
         val contactId: Long? = null,
-        val prefillPhone: String = "",
-        val prefillFavorite: Boolean = false
+        val prefillPhone: String = ""
     ) : AppSubScreen
     data class ContactDetails(val contactId: Long) : AppSubScreen
     data class CallDetails(val callLogId: Long) : AppSubScreen
@@ -61,9 +58,45 @@ sealed interface AppSubScreen {
     data object Settings : AppSubScreen
 }
 
+sealed class KeypadSuggestion {
+    abstract val key: String
+    abstract val title: String
+    abstract val subtitle: String
+    abstract val phoneNumber: String
+    abstract val photoUri: String?
+    abstract val avatarColorIndex: Int
+    abstract val isFromContact: Boolean
+
+    data class Contact(
+        val contact: ContactEntity
+    ) : KeypadSuggestion() {
+        override val key: String = "contact_${contact.id}"
+        override val title: String = contact.fullName
+        override val subtitle: String = contact.phoneNumber
+        override val phoneNumber: String = contact.phoneNumber
+        override val photoUri: String? = contact.photoUri
+        override val avatarColorIndex: Int = contact.avatarColorIndex
+        override val isFromContact: Boolean = true
+    }
+
+    data class History(
+        val callLog: CallLogEntity
+    ) : KeypadSuggestion() {
+        override val key: String = "history_${callLog.id}"
+        override val title: String = callLog.contactName ?: callLog.phoneNumber
+        override val subtitle: String = callLog.phoneNumber
+        override val phoneNumber: String = callLog.phoneNumber
+        override val photoUri: String? = callLog.photoUri
+        override val avatarColorIndex: Int = callLog.avatarColorIndex
+        override val isFromContact: Boolean = false
+        val callType: CallRecordType = callLog.callType
+        val timestamp: Long = callLog.timestamp
+        val simSlot: Int = callLog.simSlot
+    }
+}
+
 data class SearchResultsState(
     val query: String = "",
-    val matchingFavorites: List<ContactEntity> = emptyList(),
     val matchingContacts: List<ContactEntity> = emptyList(),
     val matchingCallLogs: List<CallLogEntity> = emptyList()
 )
@@ -79,7 +112,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val repository = DialerRepository(application, database.dialerDao())
     val settingsRepository = SettingsRepository(application)
 
-    private val _selectedTab = MutableStateFlow(PrimaryTab.FAVORITES)
+    private val _selectedTab = MutableStateFlow(PrimaryTab.KEYPAD)
     val selectedTab: StateFlow<PrimaryTab> = _selectedTab.asStateFlow()
 
     private val _subScreenStack = MutableStateFlow<List<AppSubScreen>>(emptyList())
@@ -119,12 +152,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val activeCallState: StateFlow<ActiveCallInfo?> = CallManager.activeCallState
     val callErrorBanner: StateFlow<String?> = CallManager.callErrorBanner
-
-    val favoritesState: StateFlow<List<ContactEntity>> = repository.favoriteContactsFlow.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5000),
-        emptyList()
-    )
 
     val contactsState: StateFlow<List<ContactEntity>> = combine(
         repository.allContactsFlow,
@@ -191,6 +218,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }.take(6)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val keypadSuggestions: StateFlow<List<KeypadSuggestion>> = combine(
+        _dialedNumber,
+        repository.allContactsFlow,
+        repository.allCallLogsFlow
+    ) { rawQuery, contacts, callLogs ->
+        val query = rawQuery.trim()
+        if (query.isEmpty()) return@combine emptyList()
+        val normalizedQuery = PhoneNumberUtilsHelper.normalizeNumber(query)
+        val digitsOnly = query.filter { it.isDigit() }
+
+        val contactMatches = contacts.filter { contact ->
+            val numberMatch = contact.phoneNumber.contains(query, ignoreCase = true) ||
+                (normalizedQuery.isNotEmpty() && contact.normalizedNumber.contains(normalizedQuery)) ||
+                (digitsOnly.isNotEmpty() && contact.normalizedNumber.contains(digitsOnly))
+            val t9Match = digitsOnly.length >= 2 &&
+                PhoneNumberUtilsHelper.nameToT9Digits(contact.fullName).contains(digitsOnly)
+            val nameMatch = contact.fullName.contains(query, ignoreCase = true)
+            numberMatch || t9Match || nameMatch
+        }.take(5).map { KeypadSuggestion.Contact(it) }
+
+        val matchedPhoneNumbers = contactMatches.map { it.phoneNumber }.toSet()
+
+        val historyMatches = callLogs.filter { log ->
+            val numberMatch = log.phoneNumber.contains(query, ignoreCase = true) ||
+                (normalizedQuery.isNotEmpty() && log.normalizedNumber.contains(normalizedQuery)) ||
+                (digitsOnly.isNotEmpty() && log.normalizedNumber.contains(digitsOnly))
+            val nameMatch = log.contactName?.contains(query, ignoreCase = true) == true
+            val t9Match = digitsOnly.length >= 2 && log.contactName != null &&
+                PhoneNumberUtilsHelper.nameToT9Digits(log.contactName).contains(digitsOnly)
+            numberMatch || nameMatch || t9Match
+        }.distinctBy { it.phoneNumber }
+            .filter { it.phoneNumber !in matchedPhoneNumbers }
+            .take(5)
+            .map { KeypadSuggestion.History(it) }
+
+        contactMatches + historyMatches
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val searchResultsState: StateFlow<SearchResultsState> = combine(
         _searchQuery,
         repository.allContactsFlow,
@@ -200,7 +265,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (q.isEmpty()) {
             return@combine SearchResultsState(
                 query = "",
-                matchingFavorites = contacts.filter { it.isFavorite }.take(8),
                 matchingContacts = contacts.take(15),
                 matchingCallLogs = callLogs.take(10)
             )
@@ -212,7 +276,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 (normQ.isNotEmpty() && c.normalizedNumber.contains(normQ)) ||
                 c.company.contains(q, ignoreCase = true)
         }
-        val matchedFavorites = matchedContacts.filter { it.isFavorite }
         val matchedLogs = callLogs.filter { log ->
             (log.contactName?.contains(q, ignoreCase = true) == true) ||
                 log.phoneNumber.contains(q, ignoreCase = true) ||
@@ -220,7 +283,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         SearchResultsState(
             query = q,
-            matchingFavorites = matchedFavorites,
             matchingContacts = matchedContacts,
             matchingCallLogs = matchedLogs
         )
@@ -245,8 +307,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return if (currentStack.isNotEmpty()) {
             _subScreenStack.value = currentStack.dropLast(1)
             true
-        } else if (_selectedTab.value != PrimaryTab.FAVORITES) {
-            _selectedTab.value = PrimaryTab.FAVORITES
+        } else if (_selectedTab.value != PrimaryTab.KEYPAD) {
+            _selectedTab.value = PrimaryTab.KEYPAD
             true
         } else {
             false
@@ -308,7 +370,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- CALL INITIATION & DUAL-SIM ---
-    fun initiateCall(context: Context, phoneNumber: String, explicitSimSlot: Int? = null) {
+    fun initiateCall(
+        context: Context,
+        phoneNumber: String,
+        explicitSimSlot: Int? = null,
+        forceSimPromptIfDualSim: Boolean = false
+    ) {
         val trimmed = phoneNumber.trim()
         if (!PhoneNumberUtilsHelper.isValidPhoneNumber(trimmed)) {
             showMessage(context.getString(com.example.R.string.error_invalid_number))
@@ -324,7 +391,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        // If user has a remembered/default SIM slot configured, or single SIM, dial immediately
+        if (sims.size > 1 && (forceSimPromptIfDualSim || settings.defaultSimSlot !in 1..2)) {
+            _pendingSimPrompt.value = PendingSimPrompt(trimmed, sims)
+            return
+        }
+
         if (settings.defaultSimSlot in 1..2) {
             executeCall(context, trimmed, settings.defaultSimSlot)
             return
@@ -419,7 +490,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- CONTACTS & FAVORITES ---
+    // --- CONTACTS ---
     fun saveContact(
         existingId: Long? = null,
         firstName: String,
@@ -429,7 +500,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         company: String,
         notes: String,
         photoUri: String?,
-        isFavorite: Boolean,
+        isFavorite: Boolean = false,
         onSaved: (Long) -> Unit = {}
     ) {
         if (!PhoneNumberUtilsHelper.isValidPhoneNumber(phoneNumber)) {
@@ -461,17 +532,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun toggleFavorite(contact: ContactEntity) {
-        viewModelScope.launch {
-            val newFav = !contact.isFavorite
-            repository.toggleFavorite(contact.id, newFav)
-            showMessage(
-                if (newFav) "${contact.fullName} added to Favorites"
-                else "${contact.fullName} removed from Favorites"
-            )
-        }
-    }
-
     // --- BLOCKING ---
     fun blockNumber(phoneNumber: String, label: String = "") {
         if (!PhoneNumberUtilsHelper.isValidPhoneNumber(phoneNumber)) {
@@ -491,7 +551,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- EXTERNAL INTENTS (SMS, SHARE, VIDEO) ---
+    // --- EXTERNAL INTENTS ---
     fun sendSmsToNumber(context: Context, phoneNumber: String, body: String = "") {
         runCatching {
             val uri = Uri.parse("smsto:${Uri.encode(phoneNumber)}")
@@ -581,9 +641,5 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateShowIncomingCalls(show: Boolean) {
         viewModelScope.launch { settingsRepository.setShowIncomingCalls(show) }
-    }
-
-    fun dismissDefaultDialerBanner() {
-        viewModelScope.launch { settingsRepository.setDefaultDialerPromptDismissed(true) }
     }
 }

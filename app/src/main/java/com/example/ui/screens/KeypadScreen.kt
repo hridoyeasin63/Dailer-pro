@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,13 +26,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.SimCard
 import androidx.compose.material3.AssistChip
@@ -50,19 +50,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.ContactEntity
 import com.example.data.repository.PhoneNumberUtilsHelper
 import com.example.telecom.SimAccountInfo
+import com.example.ui.KeypadSuggestion
 import com.example.ui.components.ContactAvatar
+import com.example.ui.components.getCallTypeVisual
 import com.example.ui.theme.CallAcceptGreen
 
 private data class KeypadKey(
@@ -72,7 +73,7 @@ private data class KeypadKey(
 
 private val keypadRows = listOf(
     listOf(
-        KeypadKey('1', "OO"),
+        KeypadKey('1', ""),
         KeypadKey('2', "ABC"),
         KeypadKey('3', "DEF")
     ),
@@ -97,193 +98,244 @@ private val keypadRows = listOf(
 @Composable
 fun KeypadScreen(
     dialedNumber: String,
-    matchingContacts: List<ContactEntity>,
+    suggestions: List<KeypadSuggestion> = emptyList(),
+    matchingContacts: List<ContactEntity> = emptyList(),
     availableSims: List<SimAccountInfo>,
     defaultSimSlot: Int,
     onDigitPress: (Char) -> Unit,
     onDigitLongPress: (Char) -> Unit,
     onBackspace: () -> Unit,
     onClear: () -> Unit,
-    onPasteNumber: (String) -> Unit,
-    onCallClick: (String) -> Unit,
-    onSelectSimSlot: (Int) -> Unit,
+    onCallClick: (String, Int?) -> Unit,
+    onSelectSimSlot: (Int) -> Unit = {},
     onAddContactWithNumber: (String) -> Unit,
-    onContactSuggestionClick: (ContactEntity) -> Unit,
+    onContactSuggestionClick: (ContactEntity) -> Unit = {},
+    onSuggestionClick: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val clipboardManager = LocalClipboardManager.current
-    val context = LocalContext.current
     val formattedNumber = remember(dialedNumber) {
         PhoneNumberUtilsHelper.formatForDisplay(dialedNumber)
     }
 
-    Column(
+    val resolvedSuggestions = remember(suggestions, matchingContacts) {
+        if (suggestions.isNotEmpty()) {
+            suggestions
+        } else {
+            matchingContacts.map { KeypadSuggestion.Contact(it) }
+        }
+    }
+
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 14.dp, vertical = 4.dp)
     ) {
-        // Matching Contacts Above Keypad
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-        ) {
-            if (dialedNumber.isNotEmpty()) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .testTag("keypad_suggestions_list"),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    contentPadding = PaddingValues(vertical = 4.dp)
-                ) {
-                    item {
-                        TextButton(
-                            onClick = { onAddContactWithNumber(dialedNumber) },
-                            modifier = Modifier.testTag("keypad_add_to_contacts_button")
-                        ) {
-                            Icon(Icons.Default.PersonAdd, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Create new contact for $formattedNumber")
-                        }
-                    }
-                    items(matchingContacts, key = { it.id }) { contact ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onContactSuggestionClick(contact) }
-                                .testTag("keypad_match_contact_${contact.id}"),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                ContactAvatar(
-                                    name = contact.fullName,
-                                    photoUri = contact.photoUri,
-                                    colorIndex = contact.avatarColorIndex,
-                                    size = 40.dp,
-                                    fontSize = 15.sp
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = contact.fullName,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = "${PhoneNumberUtilsHelper.formatForDisplay(contact.phoneNumber)} • Mobile",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                                IconButton(
-                                    onClick = { onCallClick(contact.phoneNumber) },
-                                    modifier = Modifier.testTag("keypad_match_call_${contact.id}")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Call,
-                                        contentDescription = "Call ${contact.fullName}",
-                                        tint = CallAcceptGreen
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Enter a number or T9 contact name",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
-            }
-        }
+        val screenHeight = maxHeight
+        val screenWidth = maxWidth
+        val isVeryCompactHeight = screenHeight < 620.dp
+        val isCompactHeight = screenHeight < 720.dp
 
-        // Entered Number Display & Copy/Paste/Clear Bar
+        val keyButtonHeight: Dp = when {
+            isVeryCompactHeight -> 46.dp
+            isCompactHeight -> 52.dp
+            else -> 60.dp
+        }
+        val keyButtonWidth: Dp = ((screenWidth - 40.dp) / 3).coerceIn(64.dp, 94.dp)
+        val digitFontSize: TextUnit = when {
+            isVeryCompactHeight -> 20.sp
+            isCompactHeight -> 24.sp
+            else -> 28.sp
+        }
+        val subTextFontSize: TextUnit = if (isVeryCompactHeight) 9.sp else 10.sp
+        val rowSpacing: Dp = if (isVeryCompactHeight) 4.dp else if (isCompactHeight) 6.dp else 10.dp
+        val callButtonSize: Dp = when {
+            isVeryCompactHeight -> 56.dp
+            isCompactHeight -> 62.dp
+            else -> 68.dp
+        }
+        val callIconSize: Dp = if (isVeryCompactHeight) 26.dp else 30.dp
+
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
+            // 1. TOP SECTION: Suggestions area taking all space above dialed number display
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.TopCenter
             ) {
-                // Copy & Paste affordances
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    IconButton(
-                        onClick = {
-                            val clip = clipboardManager.getText()?.text.orEmpty()
-                            if (clip.isNotBlank()) {
-                                onPasteNumber(clip)
-                            }
-                        },
-                        modifier = Modifier.testTag("keypad_paste_button")
+                if (dialedNumber.isNotEmpty()) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .testTag("keypad_suggestions_list"),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        contentPadding = PaddingValues(vertical = 4.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentPaste,
-                            contentDescription = "Paste phone number",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (dialedNumber.isNotEmpty()) {
-                        IconButton(
-                            onClick = {
-                                clipboardManager.setText(AnnotatedString(dialedNumber))
-                            },
-                            modifier = Modifier.testTag("keypad_copy_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy phone number",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        item {
+                            TextButton(
+                                onClick = { onAddContactWithNumber(dialedNumber) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("keypad_add_to_contacts_button")
+                            ) {
+                                Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Add to contacts",
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            }
+                        }
+                        items(resolvedSuggestions, key = { it.key }) { item ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onSuggestionClick(item.phoneNumber)
+                                        if (item is KeypadSuggestion.Contact) {
+                                            onContactSuggestionClick(item.contact)
+                                        }
+                                    }
+                                    .testTag("keypad_match_item_${item.key}"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    ContactAvatar(
+                                        name = item.title,
+                                        photoUri = item.photoUri,
+                                        colorIndex = item.avatarColorIndex,
+                                        size = 36.dp,
+                                        fontSize = 14.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = item.title,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            if (item is KeypadSuggestion.Contact) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Person,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Text(
+                                                    text = "Contact • " + PhoneNumberUtilsHelper.formatForDisplay(item.phoneNumber),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            } else if (item is KeypadSuggestion.History) {
+                                                val visual = getCallTypeVisual(item.callType)
+                                                Icon(
+                                                    imageVector = visual.icon,
+                                                    contentDescription = null,
+                                                    tint = visual.tint,
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                                Text(
+                                                    text = "${visual.label} • " + PhoneNumberUtilsHelper.formatForDisplay(item.phoneNumber),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                    IconButton(
+                                        onClick = { onCallClick(item.phoneNumber, null) },
+                                        modifier = Modifier.testTag("keypad_match_call_${item.key}")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Call,
+                                            contentDescription = "Call ${item.title}",
+                                            tint = CallAcceptGreen,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 16.dp),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        Text(
+                            text = "Enter a phone number",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
                 }
+            }
 
-                // Selectable Number Display
-                SelectionContainer(modifier = Modifier.weight(1f)) {
+            // 2. FIXED BOTTOM DIALER SECTION
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = if (isVeryCompactHeight) 2.dp else 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // 2a. Dialed Number Display (directly above the dialpad keys)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = if (isVeryCompactHeight) 2.dp else 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    if (dialedNumber.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(44.dp))
+                    }
+
+                    val numberFontSize = when {
+                        formattedNumber.length > 16 -> if (isVeryCompactHeight) 18.sp else 22.sp
+                        formattedNumber.length > 12 -> if (isVeryCompactHeight) 22.sp else 26.sp
+                        isVeryCompactHeight -> 26.sp
+                        isCompactHeight -> 30.sp
+                        else -> 36.sp
+                    }
+
                     Text(
-                        text = formattedNumber,
-                        style = if (formattedNumber.length > 14) {
-                            MaterialTheme.typography.headlineMedium
-                        } else {
-                            MaterialTheme.typography.displayMedium
-                        },
+                        text = formattedNumber.ifEmpty { " " },
+                        fontSize = numberFontSize,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .weight(1f)
                             .testTag("keypad_number_display")
                     )
-                }
 
-                // Backspace & Clear controls
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Single '×' Delete Button (Tap to delete 1 digit, Long press to clear all)
                     if (dialedNumber.isNotEmpty()) {
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(44.dp)
                                 .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                                 .combinedClickable(
                                     onClick = onBackspace,
                                     onLongClick = onClear
@@ -292,108 +344,170 @@ fun KeypadScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Backspace,
-                                contentDescription = "Backspace (Long press to clear)",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        IconButton(
-                            onClick = onClear,
-                            modifier = Modifier.testTag("keypad_clear_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Clear,
-                                contentDescription = "Clear number",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.width(48.dp))
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Keypad 4x3 Grid
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                keypadRows.forEach { rowKeys ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        rowKeys.forEach { keyItem ->
-                            DialpadButton(
-                                digit = keyItem.digit,
-                                subText = keyItem.subText,
-                                onClick = { onDigitPress(keyItem.digit) },
-                                onLongClick = { onDigitLongPress(keyItem.digit) }
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Delete digit (Long press to clear)",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(if (isVeryCompactHeight) 2.dp else 6.dp))
 
-            // Bottom Call Row with SIM switcher
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // SIM Slot quick switcher
-                val activeSimLabel = when (defaultSimSlot) {
-                    1 -> "SIM 1"
-                    2 -> "SIM 2"
-                    else -> if (availableSims.size > 1) "Ask SIM" else "SIM 1"
-                }
-                AssistChip(
-                    onClick = {
-                        val nextSlot = when (defaultSimSlot) {
-                            1 -> 2
-                            2 -> 0
-                            else -> 1
-                        }
-                        onSelectSimSlot(nextSlot)
-                    },
-                    label = { Text(activeSimLabel) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.SimCard,
-                            contentDescription = "Switch SIM",
-                            modifier = Modifier.size(16.dp)
-                        )
-                    },
-                    modifier = Modifier.testTag("keypad_sim_selector_chip")
-                )
-
-                // Large Emerald Call Button
-                Surface(
-                    onClick = { onCallClick(dialedNumber) },
-                    shape = CircleShape,
-                    color = CallAcceptGreen,
-                    contentColor = Color.White,
-                    shadowElevation = 6.dp,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .testTag("keypad_call_button")
+                // 2b. Dialpad 4x3 Grid (directly above call button)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(rowSpacing),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Call,
-                            contentDescription = "Call entered number",
-                            modifier = Modifier.size(34.dp)
-                        )
+                    keypadRows.forEach { rowKeys ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            rowKeys.forEach { keyItem ->
+                                ResponsiveDialpadButton(
+                                    digit = keyItem.digit,
+                                    subText = keyItem.subText,
+                                    width = keyButtonWidth,
+                                    height = keyButtonHeight,
+                                    digitFontSize = digitFontSize,
+                                    subTextFontSize = subTextFontSize,
+                                    onClick = { onDigitPress(keyItem.digit) },
+                                    onLongClick = { onDigitLongPress(keyItem.digit) }
+                                )
+                            }
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.width(76.dp))
+                Spacer(modifier = Modifier.height(if (isVeryCompactHeight) 6.dp else 10.dp))
+
+                // 2c. Call Button(s) at bottom:
+                // If dual SIM phone: 2 buttons side by side (SIM 1 & SIM 2)
+                // If 1 SIM phone: 1 Call button
+                if (availableSims.size > 1) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val sim1 = availableSims.find { it.slotIndex == 1 } ?: availableSims.firstOrNull()
+                        val sim2 = availableSims.find { it.slotIndex == 2 } ?: availableSims.getOrNull(1)
+
+                        // SIM 1 Call Button
+                        Surface(
+                            onClick = { onCallClick(dialedNumber, 1) },
+                            shape = RoundedCornerShape(28.dp),
+                            color = CallAcceptGreen,
+                            contentColor = Color.White,
+                            shadowElevation = 6.dp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(54.dp)
+                                .testTag("keypad_call_button_sim1")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Call,
+                                    contentDescription = "Call with SIM 1",
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "SIM 1",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (sim1 != null && sim1.displayName.isNotBlank() && sim1.displayName != "SIM 1") {
+                                        Text(
+                                            text = sim1.displayName,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // SIM 2 Call Button
+                        Surface(
+                            onClick = { onCallClick(dialedNumber, 2) },
+                            shape = RoundedCornerShape(28.dp),
+                            color = CallAcceptGreen,
+                            contentColor = Color.White,
+                            shadowElevation = 6.dp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(54.dp)
+                                .testTag("keypad_call_button_sim2")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Call,
+                                    contentDescription = "Call with SIM 2",
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "SIM 2",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (sim2 != null && sim2.displayName.isNotBlank() && sim2.displayName != "SIM 2") {
+                                        Text(
+                                            text = sim2.displayName,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Single SIM: 1 large centered Call button
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            onClick = { onCallClick(dialedNumber, null) },
+                            shape = CircleShape,
+                            color = CallAcceptGreen,
+                            contentColor = Color.White,
+                            shadowElevation = 6.dp,
+                            modifier = Modifier
+                                .size(callButtonSize)
+                                .testTag("keypad_call_button")
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Call,
+                                    contentDescription = "Call entered number",
+                                    modifier = Modifier.size(callIconSize)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -401,9 +515,13 @@ fun KeypadScreen(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DialpadButton(
+private fun ResponsiveDialpadButton(
     digit: Char,
     subText: String,
+    width: Dp,
+    height: Dp,
+    digitFontSize: TextUnit,
+    subTextFontSize: TextUnit,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -418,7 +536,7 @@ private fun DialpadButton(
     Box(
         modifier = Modifier
             .scale(scale)
-            .size(width = 88.dp, height = 64.dp)
+            .size(width = width, height = height)
             .clip(RoundedCornerShape(32.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
             .combinedClickable(
@@ -430,19 +548,22 @@ private fun DialpadButton(
             .testTag("keypad_key_$digit"),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             Text(
                 text = digit.toString(),
-                fontSize = 26.sp,
+                fontSize = digitFontSize,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             if (subText.isNotEmpty()) {
                 Text(
                     text = subText,
-                    fontSize = 10.sp,
+                    fontSize = subTextFontSize,
                     fontWeight = FontWeight.Medium,
-                    letterSpacing = 1.2.sp,
+                    letterSpacing = 1.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

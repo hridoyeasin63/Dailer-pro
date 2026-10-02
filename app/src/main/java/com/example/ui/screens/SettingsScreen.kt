@@ -95,7 +95,7 @@ fun SettingsScreen(
             title = { Text("Privacy Policy") },
             text = {
                 Text(
-                    "Phone stores your contacts, favorites, call history, and blocked numbers strictly on your device. " +
+                    "Phone stores your contacts, call history, and blocked numbers strictly on your device. " +
                         "No contacts or call logs are ever uploaded to external servers. All calling, caller ID, " +
                         "and call screening actions use official Android Telecom APIs."
                 )

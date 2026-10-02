@@ -1,14 +1,8 @@
 <resources>
     <string name="app_name">Phone</string>
-    <string name="tab_favorites">Favorites</string>
+    <string name="tab_keypad">Keypad</string>
     <string name="tab_recents">Recents</string>
     <string name="tab_contacts">Contacts</string>
-    <string name="tab_keypad">Keypad</string>
-
-    <string name="favorites_empty_title">Your favorite contacts will appear here.</string>
-    <string name="favorites_empty_subtitle">Pin important people for one-tap calling and quick access.</string>
-    <string name="action_add_favorite">Add Favorite</string>
-    <string name="action_manage_favorites">Manage Favorites</string>
 
     <string name="recents_empty_title">No recent calls</string>
     <string name="recents_empty_subtitle">Your incoming, outgoing, and missed calls will appear here.</string>
@@ -28,8 +22,6 @@
     <string name="action_call">Call</string>
     <string name="action_message">Message</string>
     <string name="action_video">Video</string>
-    <string name="action_favorite">Favorite</string>
-    <string name="action_unfavorite">Remove Favorite</string>
     <string name="action_add_contact">Add Contact</string>
     <string name="action_edit_contact">Edit Contact</string>
     <string name="action_delete_contact">Delete Contact</string>
@@ -46,9 +38,9 @@
 
     <string name="unknown_number">Unknown Number</string>
     <string name="incoming_call_label">Incoming call</string>
-    <string name="default_dialer_prompt_title">Make this your default phone app</string>
-    <string name="default_dialer_prompt_body">Set Phone as your default dialer to enable full-screen incoming call handling, in-call audio controls, and automatic call blocking.</string>
-    <string name="set_default_phone_app">Set as default phone app</string>
+    <string name="default_dialer_required_title">Default Phone App Required</string>
+    <string name="default_dialer_required_body">Phone must be set as your system default phone app to make and receive calls, display incoming call alerts, and manage contacts securely.</string>
+    <string name="set_default_phone_app">Set as Default Phone App</string>
 
     <string name="error_invalid_number">Please enter a valid phone number (e.g., 017XXXXXXXX or +8801XXXXXXXXX).</string>
     <string name="error_call_failed">Unable to place the call. Please check your SIM and network connection.</string>
